@@ -1,28 +1,35 @@
-#!/usr/bin/env bash
-# Create a script to install and configure HAProxy on lb-01 server
-# Configure HAProxy to send traffic to web-01 and web-02 servers
-# Distribute requests using a roundrobin algorithm
-# Make sure that HAProxy can be managed via an init script
-# Install and configure HAproxy on my lb-01 server.
-sudo apt-get -y update
-apt-get -y install haproxy
+# Script that manifest creating a custom HTTP header response.
+exec { 'apt-get-update':
+  command => '/usr/bin/apt-get update',
+}
 
-# edit config file
-server_config=\
-"
-frontend  ian-frontend
-        bind *:80
-        mode http
-        default_backend ian-backend
-backend ian-backend
-        balance roundrobin
-        server 63210-web-01 100.25.19.204:80 check
-        server 63210-web-02 54.157.159.85:80 check
-"
-echo "$server_config" | sudo tee -a /etc/haproxy/haproxy.cfg
+package { 'nginx':
+  ensure  => installed,
+  require => Exec['apt-get-update'],
+}
 
-# enable haproxy to be started by init script
+file_line { 'serve_1':
+  ensure  => 'present',
+  path    => '/etc/nginx/sites-available/default',
+  after   => 'listen 80 default_server;',
+  line    => 'rewrite ^/redirect_me https://www.youtube.com/watch?v=QH2-TGUlwu4 permanent;',
+  require => Package['nginx'],
+}
 
-echo "ENABLED=1" | sudo tee -a /etc/default/haproxy
+file_line { 'serve_2':
+  ensure  => 'present',
+  path    => '/etc/nginx/sites-available/default',
+  after   => 'listen 80 default_server;',
+  line    => 'add_header X-Served-By $hostname;',
+  require => Package['nginx'],
+}
 
-sudo service haproxy restart
+file { '/var/www/html/index.html':
+  content => 'Hello World!',
+  require => Package['nginx'],
+}
+
+service { 'nginx':
+  ensure  => running,
+  require => Package['nginx'],
+}
